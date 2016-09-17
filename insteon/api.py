@@ -99,6 +99,8 @@ class InsteonResource(object):
     def __repr__(self):
         for identifier in ['DeviceName', 'DeviceID', 'InsteonID']:
             try:
+                val = getattr(self, '_' + identifier)
+                val = unicodedata.normalize("NFKD", val)
                 return '<{}({})>'.format(identifier, getattr(self, '_' + identifier))
             except AttributeError:
                 pass
@@ -118,8 +120,6 @@ class InsteonResource(object):
 
     def __init__(self, api, resource_id=None, data=None):
         # handle weird encoding
-        if 'DeviceName' in data:
-            data['DeviceName'] = unicodedata.normalize("NFKD", data['DeviceName'])
         for data_key in self._properties:
             setattr(self, "_" + data_key, None)
         self._resource_id = resource_id
