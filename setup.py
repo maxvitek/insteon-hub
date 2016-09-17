@@ -4,7 +4,8 @@ from setuptools import setup
 
 REQUIRES = [
     'requests>=2,<3',
-    'pyyaml>=3.11,<4'
+    'pyyaml>=3.11,<4',
+    'bs4>=0.0.1'
 ]
 
 PACKAGE_NAME = 'insteon-hub'

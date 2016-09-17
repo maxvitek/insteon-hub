@@ -8,10 +8,13 @@ from .authorization import InsteonAuthorizer
 from .api import InsteonAPI, APIError
 from .resources import House, Account, Contact, Device
 from .const import __version__
+from .local import LocalHub
+
 
 class Insteon(object):
     def __init__(self, username, password, client_id,
-                user_agent='insteon_hub/%s' % __version__):
+                 local_username=None, local_password=None,
+                 user_agent='insteon_hub/%s' % __version__):
 
         self.authorizer = InsteonAuthorizer(client_id)
         self.authorizer.authorize(username, password)
@@ -31,6 +34,9 @@ class Insteon(object):
         #self.refresh_houses()
         #self.refresh_devices()
 
+        if local_username and local_password:
+            self.add_local(local_username, local_password)
+
     def refresh_devices(self):
         '''Queries hub for list of devices, and creates new device objects'''
         try:
@@ -41,6 +47,18 @@ class Insteon(object):
             print("API error: ")
             for key,value in e.data.iteritems:
                 print(str(key) + ": " + str(value))
+
+    def add_local(self, user, password):
+        '''Adds the hub locally on the network'''
+        host, port = self.api.discover_local_hub()
+        self.local_hub = LocalHub(user, password, host, port)
+        self.api.local = self.local_hub
+
+    def subscribe_local(self, callback):
+        if not self.local_hub:
+            raise Exception('add the local Insteon hub using the .add_local method')
+        
+
 
 class DeviceP(object):
     def __init__(self, data, api_iface):

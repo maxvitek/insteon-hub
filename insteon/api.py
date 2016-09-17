@@ -3,6 +3,8 @@ import json
 import sys
 import requests
 import time
+import unicodedata
+from bs4 import BeautifulSoup
 
 API_URL = "https://connect.insteon.com"
 
@@ -55,6 +57,16 @@ class InsteonAPI(object):
         response = requests.delete(API_URL + path, headers=self._set_headers())
         return self._check_response(response, self.delete, path, data)
 
+    def discover_local_hub(self):
+        '''Detect local hub ip and port'''
+        response = requests.get(API_URL + '/getinfo.asp', headers=self._set_headers())
+        soup = BeautifulSoup(response.text, 'html.parser')
+        link = soup.findAll('a')[0]
+        local_url = link.get('href')
+        local = local_url.partition('//')[2]
+        ip, port = local.split(':')
+        return ip, port
+
     def _check_response(self, response, calling_method, path, data={}):
         if response.status_code >= 400:
             if response.status_code == 401 and response.json()['code'] == 4012:
@@ -84,6 +96,14 @@ class InsteonAPI(object):
 class InsteonResource(object):
     base_path="/api/v2/"
 
+    def __repr__(self):
+        for identifier in ['DeviceName', 'DeviceID', 'InsteonID']:
+            try:
+                return '<{}({})>'.format(identifier, getattr(self, '_' + identifier))
+            except AttributeError:
+                pass
+        super(InsteonResource, self).__repr__()
+
     def all(cls, api):
         resources = []
         try:
@@ -97,6 +117,9 @@ class InsteonResource(object):
                 print(str(key) + ": " + str(value))
 
     def __init__(self, api, resource_id=None, data=None):
+        # handle weird encoding
+        if 'DeviceName' in data:
+            data['DeviceName'] = unicodedata.normalize("NFKD", data['DeviceName'])
         for data_key in self._properties:
             setattr(self, "_" + data_key, None)
         self._resource_id = resource_id
@@ -171,6 +194,24 @@ class InsteonCommandable(InsteonResource):
 
         if level:
             data['level'] = level
+
+        # send local if we're set up
+        try:
+            if hasattr(self._api_iface, 'local'):
+                insteon_id = getattr(self, "InsteonID")
+                if command == 'on':
+                    # convert level
+                    lvl = level / 100 * 255 if level else 255
+                    result = self._api_iface.local.device_on(insteon_id, level=lvl)
+                    if result:
+                        return {'id': None, 'link': None, 'status': 'complete'}
+                elif command == 'off':
+                    result = self._api_iface.local.device_off(insteon_id)
+                    if result:
+                        return {'id': None, 'link': None, 'status': 'complete'}
+        except:
+            # local failed
+            pass  # <--- so bad, subsuming every error
 
         try:
             command_info = self._api_iface.post(self.base_path + self.command_path, data)
