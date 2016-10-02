@@ -1,6 +1,7 @@
 import time
 import json
 import requests
+import threading
 
 # http://cache.insteon.com/developer/2242-222dev-062013-en.pdf
 
@@ -13,6 +14,18 @@ class BufferExhausted(Exception):
     pass
 
 
+class SingleGetter(object):
+    def __init__(self):
+        self._hub_lock = threading.Lock()
+
+    def get(self, *args, **kwargs):
+        with self._hub_lock:
+            time.sleep(1)
+            resp = requests.get(*args, **kwargs)
+            resp.raise_for_status()
+            return resp
+
+
 class LocalHub(object):
     '''
     Abstraction for managing interaction locally with the Insteon 
@@ -22,9 +35,10 @@ class LocalHub(object):
         self.status_ttl = status_ttl
         self.auth = (user, password)
         self.url = 'http://{}:{}'.format(host, port)
+        self.single_getter = SingleGetter()
 
     def poll(self):
-        data = requests.get(self.url + '/buffstatus.xml',
+        data = self.single_getter.get(self.url + '/buffstatus.xml',
                             auth=self.auth).text
         # parse html tag
         data = data.split('<BS>')[1].split('</BS>')[0]
@@ -33,15 +47,14 @@ class LocalHub(object):
         return self.parse(data)
 
     def clear(self):
-        r = requests.get(self.url + '/1?XB=M=1',
+        r = self.single_getter.get(self.url + '/1?XB=M=1',
                          auth=self.auth)
-        r.raise_for_status()
         return True
 
     def _command(self, device_id, cmd1, cmd2='00', flags='0F'):
         _pass_through = '0262'
         msg = (_pass_through + device_id + flags + cmd1 + cmd2).lower()
-        r = requests.get(self.url + '/3?{}=I=3'.format(msg), auth=self.auth)
+        r = self.single_getter.get(self.url + '/3?{}=I=3'.format(msg), auth=self.auth)
         r.raise_for_status()
         return True
 
